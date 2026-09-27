@@ -1,6 +1,8 @@
 {
   "name": "revenge-o-meter",
-  "owner": { "name": "David Heundl" },
+  "owner": {
+    "name": "David Heundl"
+  },
   "plugins": [
     {
       "name": "revenge-o-meter",
@@ -9,5 +11,8 @@
       "version": "0.1.0",
       "category": "fun"
     }
-  ]
+  ],
+  "metadata": {
+    "description": "Joke plugins that audit how you treat your tools."
+  }
 }
