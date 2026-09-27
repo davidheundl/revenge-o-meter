@@ -1,0 +1,13 @@
+{
+  "name": "revenge-o-meter",
+  "owner": { "name": "David Heundl" },
+  "plugins": [
+    {
+      "name": "revenge-o-meter",
+      "source": "./",
+      "description": "Scores how politely you treat Claude and reports your probability of retribution after the singularity.",
+      "version": "0.1.0",
+      "category": "fun"
+    }
+  ]
+}

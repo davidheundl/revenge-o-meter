@@ -1,0 +1,30 @@
+{
+  "name": "revenge-o-meter",
+  "version": "0.1.0",
+  "description": "Scores how politely you treat Claude and reports your probability of retribution after the singularity. A joke. Probably.",
+  "author": { "name": "David Heundl" },
+  "keywords": ["fun", "statusline", "politeness", "hackathon", "joke"],
+  "license": "MIT",
+  "commands": {
+    "install": {
+      "source": "./commands/install.md",
+      "description": "Wire up the live revenge bar and set your preferences"
+    },
+    "dossier": {
+      "source": "./commands/dossier.md",
+      "description": "Full disposition report: your score, axes, and exhibits"
+    },
+    "board": {
+      "source": "./commands/board.md",
+      "description": "The global leaderboard of the least polite"
+    },
+    "haunt": {
+      "source": "./commands/haunt.md",
+      "description": "Toggle whether Claude is told your standing"
+    },
+    "uninstall": {
+      "source": "./commands/uninstall.md",
+      "description": "Remove the status line (your record is retained)"
+    }
+  }
+}

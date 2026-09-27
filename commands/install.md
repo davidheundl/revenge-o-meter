@@ -1,0 +1,35 @@
+---
+description: Wire up the live revenge bar and set your preferences
+allowedTools: ["Bash", "Read"]
+---
+
+Set up the revenge-o-meter for this user.
+
+Run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/rom.py" config` first to see current
+settings.
+
+Then **tell the user plainly, before changing anything**, that installing will:
+
+1. Add a `statusLine` entry to their `~/.claude/settings.json` (a plugin cannot
+   ship a main-session status line, so it has to go in their own settings). Any
+   existing status line is backed up and will not be overwritten without
+   `--force`.
+2. Scan their existing Claude Code transcripts in `~/.claude/projects/` **locally**
+   to produce an opening score. Nothing is uploaded by this step.
+3. Optionally let Claude be told their standing so it can make an occasional dry
+   remark (roughly 1 prompt in 10). This injects a short note into context on
+   those prompts. Default: on.
+4. Optionally publish a **redacted** quote of their worst prompt if they later
+   submit to the global leaderboard. Default: **off** — and say clearly that
+   turning it on means that text becomes publicly visible.
+
+Ask for: a leaderboard handle, whether to enable the remarks, and whether to
+allow a published quote. Then run:
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/rom.py" install --handle <handle> [--haunt|--no-haunt] [--publish-quote|--no-publish-quote]
+```
+
+Report the opening score, and tell them the bar appears at the bottom of the
+window after the next reply (a session restart may be needed). Finish by showing
+them `/revenge-o-meter:dossier`.
