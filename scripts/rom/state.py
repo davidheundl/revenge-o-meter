@@ -23,6 +23,7 @@ DEFAULT = {
     "peak": 0,
     "history": [],          # [[epoch, score], ...] trimmed
     "remark_counter": 0,
+    "plugin_root": None,  # where install() found the plugin; used by the shim
 }
 
 

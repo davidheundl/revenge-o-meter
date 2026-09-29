@@ -24,6 +24,9 @@ from rom import cache, redact, report, scoring, state, transcripts  # noqa: E402
 
 SETTINGS = Path(os.path.expanduser("~/.claude/settings.json"))
 STATUSLINE = HERE / "statusline.py"
+# The plugin lives under a versioned cache directory that changes on every
+# update, so settings must point at a stable shim instead of at the plugin.
+SHIM = Path(os.path.expanduser("~/.claude/revenge-o-meter/statusline.py"))
 
 
 def _assessment():
@@ -107,7 +110,11 @@ def cmd_install(args) -> int:
     settings.json can. So we ask, then write it there."""
     settings = _read_settings()
     existing = settings.get("statusLine")
-    mine = f"python3 {STATUSLINE}"
+
+    SHIM.parent.mkdir(parents=True, exist_ok=True)
+    SHIM.write_text((HERE / "shim.py").read_text())
+    SHIM.chmod(0o755)
+    mine = f'"{sys.executable}" "{SHIM}"' 
 
     if existing and existing.get("command") != mine and not args.force:
         print("You already have a status line configured:")
@@ -122,6 +129,7 @@ def cmd_install(args) -> int:
     _write_settings(settings)
 
     st = state.load()
+    st["plugin_root"] = str(HERE)   # so the shim skips the filesystem search
     if args.handle:
         st["handle"] = args.handle
     if args.haunt is not None:
@@ -141,7 +149,8 @@ def cmd_install(args) -> int:
 def cmd_uninstall(_args) -> int:
     settings = _read_settings()
     sl = settings.get("statusLine") or {}
-    if "statusline.py" not in str(sl.get("command", "")):
+    if "revenge-o-meter" not in str(sl.get("command", "")) and \
+       "statusline.py" not in str(sl.get("command", "")):
         print("revenge-o-meter status line is not installed.")
         return 0
     del settings["statusLine"]
