@@ -36,7 +36,15 @@ window after the next reply (a session restart may be needed).
 **If they are in the Claude desktop app, say so before they go looking for it:**
 the Code tab runs the embedded CLI with `--output-format stream-json`, so there is
 no footer row for a status line to draw into — the command runs and its output is
-discarded. Point them at `/revenge-o-meter:menubar`, which puts the same readout
-in the macOS menu bar. The status line still works in a terminal.
+discarded. The status line still works in a terminal.
+
+Two readouts do reach the desktop app, and they need saying because the status
+line is what the docs and the bar itself talk about:
+
+- The **chat bar** is already on. The `UserPromptSubmit` hook prints the standing
+  as a one-line notice on every prompt, right above where they type. Turn it off
+  with `config --no-chat-bar`.
+- `/revenge-o-meter:menubar` puts the same readout in the macOS menu bar, which
+  needs SwiftBar or xbar.
 
 Finish by showing them `/revenge-o-meter:dossier`.

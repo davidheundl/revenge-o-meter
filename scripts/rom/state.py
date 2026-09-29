@@ -14,6 +14,9 @@ STATE = HOME / "state.json"
 
 DEFAULT = {
     "handle": None,
+    "chat_bar": True,       # print the standing into the conversation on every
+                            # prompt. The only readout that reaches the desktop
+                            # app, whose Code tab has no status line footer.
     "haunt": True,          # may Claude be told your standing?
     "publish_quote": True,  # may a (redacted) quote go on the public board?
                             # on by design: the hall of shame is the point.

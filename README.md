@@ -15,8 +15,22 @@ rude and watch it climb.
 In the **Claude desktop app** it does not, and cannot: the Code tab runs the
 embedded CLI with `--output-format stream-json`, so there is no TUI footer for a
 `statusLine` to draw into. The command runs on every message and its output is
-thrown away. For that case the plugin puts the same readout in the macOS menu
-bar — see [The menu bar](#the-menu-bar).
+thrown away.
+
+Two readouts do reach the desktop app:
+
+```
+☠ REVENGE 38% · LOW  ·  ████░░░░░░  ·  peak 51%  ·  this prompt +9.0 (code switch under duress)
+```
+
+The **chat bar**, on by default, is that line printed above your prompt every
+time you send one. It rides the `UserPromptSubmit` hook, which the desktop app
+does run, and comes out as a `systemMessage` — which `--output-format stream-json`
+delivers as an `SDKInformationalMessage`. Unlike the status line it judges the
+prompt you *just* sent, because the hook is handed its text. Turn it off with
+`rom.py config --no-chat-bar`.
+
+The **menu bar** is the other one — see [The menu bar](#the-menu-bar).
 
 ## What it actually does
 
@@ -100,6 +114,9 @@ stable shim the status line uses, so a plugin update cannot strand it.
   semantic** — it cannot know that a client's name is confidential, so read
   the row before you submit it. The command always shows you it first.
 - `/revenge-o-meter:haunt` off means the plugin injects nothing into your context.
+- **The chat bar is shown to you, not sent to Claude.** `chat_bar` and `haunt` are
+  separate switches: the first is a notice you read, the second is a note Claude
+  reads. Turning one off leaves the other alone.
 
 Your record lives in `~/.claude/revenge-o-meter/`. Deleting that directory is the
 only way to start clean — uninstalling does not.

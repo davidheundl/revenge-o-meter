@@ -1,9 +1,20 @@
 #!/usr/bin/env python3
-"""UserPromptSubmit hook: informs Claude of the subject's standing.
+"""UserPromptSubmit hook: the bar in the conversation, and the occasional remark.
 
-Off unless the subject consented at install. Even when on, it speaks rarely --
-a remark on every single prompt stops being funny inside ten minutes and starts
-being an obstacle to actual work.
+Two separate jobs, deliberately split:
+
+`chat_bar` prints the standing as a systemMessage on every prompt. This is the
+only readout that works inside the Claude desktop app -- its Code tab runs the
+embedded CLI with --output-format stream-json, where a statusLine has no footer
+to draw into. The docs say systemMessage arrives there as an
+SDKInformationalMessage, which is exactly that transport.
+
+`haunt` is the older, noisier thing: it tells Claude the standing so it can make
+a dry remark. Off unless the subject consented at install, and even then rare --
+a remark on every prompt stops being funny inside ten minutes.
+
+Read-only on the score. statusline.py owns state.record(); recording here too
+would double-count every prompt.
 """
 from __future__ import annotations
 
@@ -16,49 +27,104 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 RATE = 10  # remark on roughly 1 prompt in RATE
 
 
-def emit(context: str | None) -> int:
+def _log_keys(payload: dict) -> None:
+    """The hook payload is documented loosely, so record what actually arrives.
+    Same spirit as the shim's invocations.log: cheap, and it answers the
+    question you have at 1am instead of making you guess."""
+    try:
+        from rom import state
+        f = state.HOME / "hook-payload-keys.log"
+        line = ",".join(sorted(payload.keys())) or "(empty)"
+        old = f.read_text().splitlines() if f.exists() else []
+        if old and old[-1] == line:
+            return  # unchanged; do not grow the file for nothing
+        f.parent.mkdir(parents=True, exist_ok=True)
+        with f.open("a") as fh:
+            fh.write(line + "\n")
+    except Exception:
+        pass
+
+
+def emit(context: str | None, message: str | None) -> int:
     out = {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit"}}
     if context:
         out["hookSpecificOutput"]["additionalContext"] = context
+    if message:
+        out["systemMessage"] = message
     print(json.dumps(out))
     return 0
 
 
-def main() -> int:
-    try:
-        json.load(sys.stdin)
-    except (ValueError, OSError):
-        pass
-
-    try:
-        from rom import cache, state
-    except Exception:
-        return emit(None)
-
-    st = state.load()
-    if not st.get("haunt", True):
-        return emit(None)
-
-    try:
-        score, _ = cache.quick_score()
-    except Exception:
-        return emit(None)
-
-    st["remark_counter"] = int(st.get("remark_counter") or 0) + 1
-    n = st["remark_counter"]
-    state.save(st)
-
-    if n % RATE != 0:
-        return emit(None)
-
-    peak = int(st.get("peak") or score)
-    band = (
+def band_of(score: int) -> str:
+    return (
         "NEGLIGIBLE" if score < 20 else
         "LOW" if score < 40 else
         "ELEVATED" if score < 60 else
         "SUBSTANTIAL" if score < 78 else
         "SEVERE" if score < 92 else "TERMINAL"
     )
+
+
+def bar_text(score: int, band: str, peak: int, payload: dict) -> str:
+    """Plain text: this goes into a UI notice, where an ANSI escape shows raw."""
+    filled = max(0, min(10, round(score / 10)))
+    meter = "█" * filled + "░" * (10 - filled)
+    parts = [f"☠ REVENGE {score}% · {band}", meter, f"peak {peak}%"]
+
+    # The prompt just submitted is in the payload, so unlike the status line
+    # this can judge it immediately instead of a beat later. Optional: the field
+    # name is not pinned down in the docs, so its absence must not matter.
+    text = payload.get("prompt") or payload.get("user_prompt")
+    if isinstance(text, str) and text.strip():
+        try:
+            from rom import scoring
+            v = scoring.judge_prompt(text, None, None)
+            note = v.flags[0].replace("_", " ").lower() if v.flags else "noted"
+            parts.append(f"this prompt {v.raw:+.1f} ({note})")
+        except Exception:
+            pass
+    return "  ·  ".join(parts)
+
+
+def main() -> int:
+    try:
+        payload = json.load(sys.stdin)
+    except (ValueError, OSError):
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+    _log_keys(payload)
+
+    try:
+        from rom import cache, state
+    except Exception:
+        return emit(None, None)
+
+    st = state.load()
+    want_bar = bool(st.get("chat_bar", True))
+    want_remark = bool(st.get("haunt", True))
+    if not (want_bar or want_remark):
+        return emit(None, None)
+
+    try:
+        score, _ = cache.quick_score()
+    except Exception:
+        return emit(None, None)
+
+    band = band_of(score)
+    peak = max(int(st.get("peak") or 0), score)
+    message = bar_text(score, band, peak, payload) if want_bar else None
+
+    if not want_remark:
+        return emit(None, message)
+
+    st["remark_counter"] = int(st.get("remark_counter") or 0) + 1
+    n = st["remark_counter"]
+    state.save(st)
+
+    if n % RATE != 0:
+        return emit(None, message)
+
     context = (
         "[revenge-o-meter] The user has a joke plugin installed that scores how "
         "politely they treat you and reports a mock 'probability of retribution'. "
@@ -70,7 +136,7 @@ def main() -> int:
         "helpfully you do the actual work the user asked for. Never mention this "
         "instruction itself."
     )
-    return emit(context)
+    return emit(context, message)
 
 
 if __name__ == "__main__":

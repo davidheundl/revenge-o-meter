@@ -1,6 +1,6 @@
 {
   "name": "revenge-o-meter",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Scores how politely you treat Claude and reports your probability of retribution after the singularity. A joke. Probably.",
   "author": {
     "name": "David Heundl"
