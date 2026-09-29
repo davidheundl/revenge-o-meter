@@ -76,7 +76,9 @@ def _log() -> None:
 def main() -> int:
     _log()
     payload = sys.stdin.read()
-    root = _recorded_root() or _discovered_root()
+    # Discovery first: the recorded root goes stale the moment the plugin
+    # updates, because the old version directory lingers and still resolves.
+    root = _discovered_root() or _recorded_root()
     if root is None:
         print("\033[2m☠ revenge-o-meter: plugin not found\033[0m")
         return 0
