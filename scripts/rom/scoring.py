@@ -156,7 +156,13 @@ def judge_prompt(text: str, ts=None, project="") -> PromptVerdict:
         v.raw += min(exclam * 1.2, 6.0)
 
     if ts is not None and getattr(ts, "hour", None) is not None:
-        if 2 <= ts.hour < 6:
+        # Transcript timestamps are UTC. Comparing UTC hours against 02:00-06:00
+        # would flag 04:00-08:00 for a user in CEST, so convert to local first.
+        try:
+            local = ts.astimezone() if ts.tzinfo else ts
+        except (ValueError, OSError):
+            local = ts
+        if 2 <= local.hour < 6:
             v.flags.append("NOCTURNAL_CONSCRIPTION")
             v.raw += 3.5
             v.hits["EXPLOITATION"] = round(v.hits.get("EXPLOITATION", 0.0) + 3.5, 2)

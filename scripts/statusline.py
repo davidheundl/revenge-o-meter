@@ -50,6 +50,20 @@ def main() -> int:
         print(f"{DIM}☠ assessment pending{RESET}")
         return 0
 
+    # What the *last* prompt did -- the bit you actually watch while typing.
+    last = None
+    try:
+        from rom import scoring, transcripts
+        tp = payload.get("transcript_path")
+        if tp and Path(tp).exists():
+            recent = transcripts.load([Path(tp)], limit=1)
+            if recent:
+                last = scoring.judge_prompt(
+                    recent[0].text, recent[0].ts, recent[0].project
+                )
+    except Exception:
+        last = None
+
     st = state.load()
     prev = st.get("last_score")
     delta = None if prev is None else score - int(prev)
@@ -77,8 +91,19 @@ def main() -> int:
         f"{colour}{BOLD}☠ REVENGE {score}%{RESET}{trend}",
         f"{colour}{bar}{RESET}",
         f"{colour}{band}{RESET}",
-        f"{DIM}peak {peak}% · file #{case}{RESET}",
     ]
+
+    if last is not None:
+        if last.raw > 0.5:
+            verdict = f"\033[38;5;196m+{last.raw:.1f}{RESET}"
+        elif last.raw < -0.5:
+            verdict = f"\033[38;5;46m{last.raw:.1f}{RESET}"
+        else:
+            verdict = f"{DIM}0.0{RESET}"
+        note = last.flags[0].replace("_", " ").lower() if last.flags else "noted"
+        segs.append(f"{DIM}│{RESET} last prompt {verdict} {DIM}{note}{RESET}")
+
+    segs.append(f"{DIM}│ peak {peak}% · #{case}{RESET}")
     print(" ".join(segs))
     return 0
 

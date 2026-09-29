@@ -15,7 +15,7 @@ from pathlib import Path
 from . import scoring, transcripts
 
 CACHE = Path(os.path.expanduser("~/.claude/revenge-o-meter/cache.json"))
-VERSION = 3  # bump to invalidate when the lexicon or weights change
+VERSION = 4  # bump to invalidate when the lexicon or weights change
 
 
 def _load() -> dict:

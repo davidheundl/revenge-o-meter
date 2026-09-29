@@ -59,7 +59,22 @@ def _discovered_root() -> Path | None:
     return best.parent
 
 
+def _log() -> None:
+    """Proof of life: shows whether the host is calling us at all."""
+    try:
+        f = STATE.parent / "invocations.log"
+        import time
+        with f.open("a") as fh:
+            fh.write(time.strftime("%Y-%m-%d %H:%M:%S") + "\n")
+        # keep it small
+        lines = f.read_text().splitlines()[-200:]
+        f.write_text("\n".join(lines) + "\n")
+    except OSError:
+        pass
+
+
 def main() -> int:
+    _log()
     payload = sys.stdin.read()
     root = _recorded_root() or _discovered_root()
     if root is None:
