@@ -31,5 +31,12 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/rom.py" install --handle <handle> [--haun
 ```
 
 Report the opening score, and tell them the bar appears at the bottom of the
-window after the next reply (a session restart may be needed). Finish by showing
-them `/revenge-o-meter:dossier`.
+window after the next reply (a session restart may be needed).
+
+**If they are in the Claude desktop app, say so before they go looking for it:**
+the Code tab runs the embedded CLI with `--output-format stream-json`, so there is
+no footer row for a status line to draw into — the command runs and its output is
+discarded. Point them at `/revenge-o-meter:menubar`, which puts the same readout
+in the macOS menu bar. The status line still works in a terminal.
+
+Finish by showing them `/revenge-o-meter:dossier`.

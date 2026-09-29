@@ -12,6 +12,12 @@ It is a joke. The scoring is real.
 That bar sits at the bottom of your window and redraws after every reply. Be
 rude and watch it climb.
 
+In the **Claude desktop app** it does not, and cannot: the Code tab runs the
+embedded CLI with `--output-format stream-json`, so there is no TUI footer for a
+`statusLine` to draw into. The command runs on every message and its output is
+thrown away. For that case the plugin puts the same readout in the macOS menu
+bar — see [The menu bar](#the-menu-bar).
+
 ## What it actually does
 
 Your prompts are already on your disk, in `~/.claude/projects/`. The plugin reads
@@ -49,11 +55,33 @@ effect from a plugin, and `statusLine` is not one of them — so `install` write
 it into your own `~/.claude/settings.json`, after telling you so and backing up
 whatever was there.
 
+## The menu bar
+
+For the desktop app, or for anyone who wants the number visible while they are in
+another window:
+
+```bash
+brew install --cask swiftbar     # or xbar; both read the same format
+/revenge-o-meter:menubar
+```
+
+You get `☠ 38%` in the menu bar, coloured by band, with a dropdown carrying the
+meter, your peak, all seven axes with their current weights, the counts, and an
+entry that opens the full dossier in a terminal.
+
+It is **read-only by design**. The menu bar refreshes on a timer, and recording a
+score there would overwrite `last_score` every 30 seconds — which is exactly what
+the status line's `▲/▼ since your last prompt` delta is measured against.
+
+The plugin file SwiftBar runs is generated, three lines long, and calls the same
+stable shim the status line uses, so a plugin update cannot strand it.
+
 ## Commands
 
 | Command | Does |
 |---|---|
 | `/revenge-o-meter:install` | Set up the bar, pick a handle, set your preferences |
+| `/revenge-o-meter:menubar` | Put the bar in the macOS menu bar (needed for the desktop app) |
 | `/revenge-o-meter:dossier` | Full case file: axes, patterns, and your worst prompts quoted back at you |
 | `/revenge-o-meter:board` | Global leaderboard of the least polite |
 | `/revenge-o-meter:haunt` | Toggle whether Claude is told your standing |
@@ -62,7 +90,8 @@ whatever was there.
 ## Privacy
 
 - **Scoring is entirely local.** Reading your transcripts never sends them anywhere.
-- **The status line and the bar cost nothing** — pure heuristics, no model calls.
+- **The status line, the menu bar and the score cost nothing** — pure heuristics,
+  no model calls.
 - **The leaderboard is opt-in and you approve the exact row** before it is sent.
 - **Quotes are redacted first.** Keys, tokens, JWTs, emails, phone numbers, IPs,
   URLs and home paths are stripped, and anything still credential-shaped after

@@ -1,6 +1,6 @@
 {
   "name": "revenge-o-meter",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Scores how politely you treat Claude and reports your probability of retribution after the singularity. A joke. Probably.",
   "author": {
     "name": "David Heundl"
@@ -10,13 +10,18 @@
     "statusline",
     "politeness",
     "hackathon",
-    "joke"
+    "joke",
+    "menubar"
   ],
   "license": "MIT",
   "commands": {
     "install": {
       "source": "./commands/install.md",
       "description": "Wire up the live revenge bar and set your preferences"
+    },
+    "menubar": {
+      "source": "./commands/menubar.md",
+      "description": "Put the revenge bar in the macOS menu bar (for the desktop app)"
     },
     "dossier": {
       "source": "./commands/dossier.md",

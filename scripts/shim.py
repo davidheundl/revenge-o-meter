@@ -9,6 +9,10 @@ plugin updates.
 
 So `install` writes THIS file to a fixed location outside the plugin and points
 settings at it. It finds the current plugin, newest first, and hands over.
+
+The same problem applies to the SwiftBar plugin file in the menu bar, so this
+shim takes the script to hand over to as its one argument -- `statusline.py`
+when called without one.
 """
 from __future__ import annotations
 
@@ -59,10 +63,24 @@ def _discovered_root() -> Path | None:
     return best.parent
 
 
-def _log() -> None:
+DEFAULT_TARGET = "statusline.py"
+# Which scripts this shim is allowed to hand over to. An allowlist, because the
+# target arrives as argv from a file the user can edit.
+TARGETS = ("statusline.py", "menubar.py")
+
+
+def _target() -> str:
+    want = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_TARGET
+    return want if want in TARGETS else DEFAULT_TARGET
+
+
+def _log(target: str) -> None:
     """Proof of life: shows whether the host is calling us at all."""
     try:
-        f = STATE.parent / "invocations.log"
+        stem = Path(target).stem
+        name = "invocations.log" if target == DEFAULT_TARGET \
+            else f"invocations-{stem}.log"
+        f = STATE.parent / name
         import time
         with f.open("a") as fh:
             fh.write(time.strftime("%Y-%m-%d %H:%M:%S") + "\n")
@@ -73,24 +91,38 @@ def _log() -> None:
         pass
 
 
+def _fail(target: str, message: str) -> int:
+    """Say so in the host's own language: ANSI in a terminal footer, SwiftBar's
+    plugin format in the menu bar, where an escape code would show up raw."""
+    if target == "menubar.py":
+        print("☠ -- | color=#6e6e6e,#9a9a9a")
+        print("---")
+        print(f"{message} | size=12 color=#6e6e6e,#9a9a9a")
+    else:
+        print(f"\033[2m☠ {message}\033[0m")
+    return 0
+
+
 def main() -> int:
-    _log()
-    payload = sys.stdin.read()
+    target = _target()
+    _log(target)
+    # A tty means someone is running this by hand; reading stdin would hang.
+    payload = "" if sys.stdin.isatty() else sys.stdin.read()
     # Discovery first: the recorded root goes stale the moment the plugin
     # updates, because the old version directory lingers and still resolves.
     root = _discovered_root() or _recorded_root()
     if root is None:
-        print("\033[2m☠ revenge-o-meter: plugin not found\033[0m")
-        return 0
+        return _fail(target, "revenge-o-meter: plugin not found")
     try:
         out = subprocess.run(
-            [sys.executable, str(root / "statusline.py")],
-            input=payload, text=True, capture_output=True, timeout=8,
+            [sys.executable, str(root / target)],
+            input=payload, text=True, capture_output=True, timeout=20,
         )
     except Exception:
-        print("\033[2m☠ revenge-o-meter unavailable\033[0m")
-        return 0
-    sys.stdout.write(out.stdout or "\033[2m☠ revenge-o-meter\033[0m\n")
+        return _fail(target, "revenge-o-meter unavailable")
+    if not out.stdout:
+        return _fail(target, "revenge-o-meter")
+    sys.stdout.write(out.stdout)
     return 0
 
 
@@ -98,5 +130,4 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except Exception:
-        print("\033[2m☠ revenge-o-meter\033[0m")
-        sys.exit(0)
+        sys.exit(_fail(_target(), "revenge-o-meter"))
