@@ -79,9 +79,11 @@ brew install --cask swiftbar     # or xbar; both read the same format
 /revenge-o-meter:menubar
 ```
 
-You get `☠ 38%` in the menu bar, coloured by band, with a dropdown carrying the
-meter, your peak, all seven axes with their current weights, the counts, and an
-entry that opens the full dossier in a terminal.
+You get an orange skull and `38%` in the menu bar, with a dropdown carrying the
+meter, your band and peak, all seven axes with their current weights, the
+counts, and an entry that opens the full dossier in a terminal. Colours are
+Anthropic's palette, the same as the prompt box badge. The SF Symbol icons in
+the dropdown are SwiftBar's; xbar shows the same menu without them.
 
 It is **read-only by design**. The menu bar refreshes on a timer, and recording a
 score there would overwrite `last_score` every 30 seconds — which is exactly what
