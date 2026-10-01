@@ -55,16 +55,6 @@ def emit(context: str | None, message: str | None) -> int:
     return 0
 
 
-def band_of(score: int) -> str:
-    return (
-        "NEGLIGIBLE" if score < 20 else
-        "LOW" if score < 40 else
-        "ELEVATED" if score < 60 else
-        "SUBSTANTIAL" if score < 78 else
-        "SEVERE" if score < 92 else "TERMINAL"
-    )
-
-
 def bar_text(score: int, band: str, peak: int, payload: dict) -> str:
     """Plain text: this goes into a UI notice, where an ANSI escape shows raw."""
     filled = max(0, min(10, round(score / 10)))
@@ -77,13 +67,26 @@ def bar_text(score: int, band: str, peak: int, payload: dict) -> str:
     text = payload.get("prompt") or payload.get("user_prompt")
     if isinstance(text, str) and text.strip():
         try:
-            from rom import scoring
-            v = scoring.judge_prompt(text, None, None)
-            note = v.flags[0].replace("_", " ").lower() if v.flags else "noted"
-            parts.append(f"this prompt {v.raw:+.1f} ({note})")
+            v = judge_now(text, payload)
+            parts.append(f"this prompt {v.raw:+.1f} · {v.summary}")
         except Exception:
             pass
     return "  ·  ".join(parts)
+
+
+def judge_now(text: str, payload: dict):
+    """Judge the prompt just submitted the way the record will judge it later:
+    with the local clock and with Claude's previous reply as context, read
+    from the tail of the transcript so a long session cannot blow the hook's
+    five seconds."""
+    from datetime import datetime, timezone
+    from rom import appeals, scoring, transcripts
+    reply = ""
+    tp = payload.get("transcript_path")
+    if isinstance(tp, str) and tp:
+        reply = transcripts.last_reply(Path(tp))
+    return scoring.judge_prompt(text, datetime.now(timezone.utc), "",
+                                scoring.Context.from_reply(reply), appeals.adjust())
 
 
 def main() -> int:
@@ -96,7 +99,7 @@ def main() -> int:
     _log_keys(payload)
 
     try:
-        from rom import cache, state
+        from rom import cache, scoring, state
     except Exception:
         return emit(None, None)
 
@@ -112,7 +115,7 @@ def main() -> int:
         return emit(None, None)
     state.publish_live(score)
 
-    band = band_of(score)
+    band = scoring.band_of(score)
     peak = max(int(st.get("peak") or 0), score)
     message = bar_text(score, band, peak, payload) if want_bar else None
 

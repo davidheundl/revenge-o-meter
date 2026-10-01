@@ -7,6 +7,7 @@ structurally, then strip the wrappers that look like prose but aren't.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -14,7 +15,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-PROJECTS_DIR = Path(os.path.expanduser("~/.claude/projects"))
+# REVENGE_PROJECTS lets the tests point at fixtures instead of your history.
+PROJECTS_DIR = Path(os.environ.get("REVENGE_PROJECTS")
+                    or os.path.expanduser("~/.claude/projects"))
+REPLY_TAIL = 3000  # chars of Claude's previous reply kept as context
 
 # Wrappers that arrive as user-role text but were never typed by a person.
 _SYNTHETIC = (
@@ -40,10 +44,22 @@ class Prompt:
     session: str
     project: str
     cwd: str = ""
+    prev_reply: str = ""   # tail of what Claude said just before this prompt
 
     @property
     def words(self) -> int:
         return len(self.text.split())
+
+    @property
+    def key(self) -> str:
+        """Stable id for one submission, shared by every copy of it that a
+        resumed or forked session leaves behind."""
+        return prompt_key(self.text, self.ts)
+
+
+def prompt_key(text: str, ts: datetime | None) -> str:
+    stamp = ts.isoformat() if ts else ""
+    return hashlib.sha1(f"{stamp}\n{text}".encode()).hexdigest()[:12]
 
 
 def _content_text(content) -> str:
@@ -65,6 +81,11 @@ def _parse_ts(raw) -> datetime | None:
         return datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
     except ValueError:
         return None
+
+
+def _reply_text(obj: dict) -> str:
+    """The prose of an assistant line: text blocks only, no thinking, no tools."""
+    return _content_text(obj.get("message", {}).get("content")).strip()
 
 
 def is_human_prompt(obj: dict) -> bool:
@@ -117,8 +138,25 @@ def load(paths: list[Path] | None = None, limit: int | None = None) -> list[Prom
             handle = fp.open(errors="ignore")
         except OSError:
             continue
+        reply = ""  # Claude's last words before the next prompt, in this file
         with handle:
             for line in handle:
+                assistant = '"type":"assistant"' in line or '"type": "assistant"' in line
+                if assistant:
+                    # Most assistant lines are tool calls; only parse the ones
+                    # that can carry prose.
+                    if '"text"' not in line:
+                        continue
+                    try:
+                        obj = json.loads(line)
+                    except (ValueError, TypeError):
+                        continue
+                    if obj.get("isSidechain") or obj.get("agentId"):
+                        continue
+                    text = _reply_text(obj)
+                    if text:
+                        reply = text[-REPLY_TAIL:]
+                    continue
                 if '"type":"user"' not in line and '"type": "user"' not in line:
                     continue
                 try:
@@ -137,8 +175,10 @@ def load(paths: list[Path] | None = None, limit: int | None = None) -> list[Prom
                         session=obj.get("sessionId", fp.stem),
                         project=project,
                         cwd=obj.get("cwd", ""),
+                        prev_reply=reply,
                     )
                 )
+                reply = ""
     # Resumed and forked sessions copy earlier turns into a new transcript, so
     # the same submission can appear in several files. Count it once.
     seen: set[tuple[str, str]] = set()
@@ -152,3 +192,33 @@ def load(paths: list[Path] | None = None, limit: int | None = None) -> list[Prom
 
     unique.sort(key=lambda p: p.ts or datetime.min.replace(tzinfo=timezone.utc))
     return unique[-limit:] if limit else unique
+
+
+def last_reply(path: Path, max_bytes: int = 512_000) -> str:
+    """Claude's most recent prose in one transcript, reading only its tail.
+    For the prompt hook, which has five seconds and a transcript that can run
+    to tens of megabytes."""
+    try:
+        with path.open("rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            size = fh.tell()
+            fh.seek(max(0, size - max_bytes))
+            lines = fh.read().decode("utf-8", errors="ignore").splitlines()
+    except OSError:
+        return ""
+    # The prompt being judged may or may not be written yet; either way the
+    # last assistant prose in the file is the reply it answers.
+    for line in reversed(lines):
+        if '"text"' not in line or not (
+                '"type":"assistant"' in line or '"type": "assistant"' in line):
+            continue
+        try:
+            obj = json.loads(line)
+        except (ValueError, TypeError):
+            continue
+        if obj.get("isSidechain") or obj.get("agentId"):
+            continue
+        text = _reply_text(obj)
+        if text:
+            return text[-REPLY_TAIL:]
+    return ""

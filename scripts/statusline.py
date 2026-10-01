@@ -18,18 +18,20 @@ DIM = "\033[2m"
 BOLD = "\033[1m"
 
 
+COLOURS = {
+    "NEGLIGIBLE": "\033[38;5;46m",
+    "LOW": "\033[38;5;118m",
+    "ELEVATED": "\033[38;5;220m",
+    "SUBSTANTIAL": "\033[38;5;208m",
+    "SEVERE": "\033[38;5;196m",
+    "TERMINAL": "\033[38;5;201m",
+}
+
+
 def band_colour(score: int) -> tuple[str, str]:
-    if score < 20:
-        return "\033[38;5;46m", "NEGLIGIBLE"
-    if score < 40:
-        return "\033[38;5;118m", "LOW"
-    if score < 60:
-        return "\033[38;5;220m", "ELEVATED"
-    if score < 78:
-        return "\033[38;5;208m", "SUBSTANTIAL"
-    if score < 92:
-        return "\033[38;5;196m", "SEVERE"
-    return "\033[38;5;201m", "TERMINAL"
+    from rom import scoring
+    band = scoring.band_of(score)
+    return COLOURS[band], band
 
 
 def main() -> int:
@@ -51,16 +53,13 @@ def main() -> int:
         return 0
 
     # What the *last* prompt did -- the bit you actually watch while typing.
+    # Read from the verdict store quick_score just refreshed, so it is the
+    # same verdict the record holds.
     last = None
     try:
-        from rom import scoring, transcripts
         tp = payload.get("transcript_path")
         if tp and Path(tp).exists():
-            recent = transcripts.load([Path(tp)], limit=1)
-            if recent:
-                last = scoring.judge_prompt(
-                    recent[0].text, recent[0].ts, recent[0].project
-                )
+            last = cache.last_in(Path(tp))
     except Exception:
         last = None
 
@@ -101,8 +100,7 @@ def main() -> int:
             verdict = f"\033[38;5;46m{last.raw:.1f}{RESET}"
         else:
             verdict = f"{DIM}0.0{RESET}"
-        note = last.flags[0].replace("_", " ").lower() if last.flags else "noted"
-        segs.append(f"{DIM}│{RESET} last prompt {verdict} {DIM}{note}{RESET}")
+        segs.append(f"{DIM}│{RESET} last prompt {verdict} {DIM}{last.summary}{RESET}")
 
     segs.append(f"{DIM}│ peak {peak}% · #{case}{RESET}")
     print(" ".join(segs))

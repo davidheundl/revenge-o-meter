@@ -10,6 +10,9 @@
     rom.py menubar --install -- put the bar in the macOS menu bar
     rom.py config            -- show/set handle, haunt, publish_quote
     rom.py board             -- JSON row for the global leaderboard
+    rom.py recent [-n N]     -- the latest verdicts, with their reasons and ids
+    rom.py appeal ID|--last  -- strike a misread verdict from the record
+    rom.py appeal --list     -- appeals on file; --withdraw ID takes one back
 """
 from __future__ import annotations
 
@@ -24,7 +27,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from rom import cache, redact, report, scoring, state, transcripts  # noqa: E402
+from rom import appeals, cache, redact, report, scoring, state, transcripts  # noqa: E402
 
 SETTINGS = Path(os.path.expanduser("~/.claude/settings.json"))
 STATUSLINE = HERE / "statusline.py"
@@ -55,7 +58,9 @@ MENUBAR_STEM = "revenge-o-meter"
 
 
 def _assessment():
-    return scoring.assess(transcripts.load())
+    """The full path: same verdicts and arithmetic as cache.assessment(), but
+    with the prompt text attached, for the exhibits."""
+    return scoring.assess(transcripts.load(), appeals.adjust(), appeals.keys())
 
 
 def cmd_assess(_args) -> int:
@@ -80,7 +85,9 @@ def cmd_data(args) -> int:
 
     def exhibit(v):
         row = {
+            "id": v.key,
             "severity": round(v.severity, 2),
+            "reason": v.summary,
             "flags": v.flags,
             "ts": v.ts.isoformat() if v.ts else None,
             "project": v.project,
@@ -422,6 +429,83 @@ def cmd_board(_args) -> int:
     return 0
 
 
+def _recent(n: int) -> list:
+    """The last n verdicts with their text, newest first."""
+    a = _assessment()
+    return list(reversed(a.verdicts[-n:])), a
+
+
+def _quote(text: str, width: int = 70) -> str:
+    q = " ".join(text.split())
+    return q if len(q) <= width else q[: width - 1] + "…"
+
+
+def cmd_recent(args) -> int:
+    rows, _a = _recent(args.n)
+    if args.json:
+        print(json.dumps([{"id": v.key, "raw": v.raw, "reason": v.summary,
+                           "ts": v.ts.isoformat() if v.ts else None,
+                           "quote": redact.scrub(v.text)} for v in rows], indent=2))
+        return 0
+    for v in rows:
+        stamp = v.ts.astimezone().strftime("%m-%d %H:%M") if v.ts else "undated"
+        print(f"{v.key}  {stamp}  {v.raw:+6.1f}  {v.summary}")
+        print(f"              \"{_quote(v.text)}\"")
+    return 0
+
+
+def cmd_appeal(args) -> int:
+    if args.list:
+        record = appeals.load()
+        if not record:
+            print("No appeals on file.")
+        for key, e in sorted(record.items(), key=lambda kv: kv[1].get("at", 0)):
+            note = f"  -- {e['note']}" if e.get("note") else ""
+            print(f"{key}  struck {e.get('raw', 0):+.1f}  {e.get('summary', '')}{note}")
+        adj = appeals.adjust(record)
+        for rule, f in sorted(adj.items()):
+            print(f"  rule {rule} now weighs x{f:g} for you")
+        return 0
+    if args.withdraw:
+        if not appeals.withdraw(args.withdraw):
+            print(f"No appeal on file for {args.withdraw}.")
+            return 1
+        print(f"Appeal {args.withdraw} withdrawn. The verdict stands again.")
+        return 0
+
+    before, _ = cache.quick_score()
+    a = _assessment()
+    if args.last:
+        target = next((v for v in reversed(a.verdicts) if v.raw > 0), None)
+        if target is None:
+            print("Nothing on file counts against you. There is nothing to appeal.")
+            return 1
+    else:
+        target = next((v for v in a.verdicts if v.key == args.id), None)
+        if target is None:
+            print(f"No verdict {args.id!r} on file (or it was already struck). "
+                  "See `rom.py recent`.")
+            return 1
+    if target.raw <= 0:
+        print("That verdict counts in your favour. The Board does not hear "
+              "appeals against leniency.")
+        return 1
+
+    entry = appeals.grant(target, args.note or "")
+    after, _ = cache.quick_score()
+    print(f"APPEAL GRANTED  {target.key}")
+    print(f"  struck:   {target.raw:+.1f}  {entry['summary']}")
+    print(f'  quote:    "{_quote(target.text)}"')
+    print(f"  standing: {before}% -> {after}%")
+    adj = appeals.adjust()
+    for rule in entry["rules"]:
+        if rule in adj:
+            print(f"  rule {rule} has been appealed often enough that it now "
+                  f"weighs x{adj[rule]:g} for you.")
+    state.publish_live(after)
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="rom", description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -469,6 +553,20 @@ def main() -> int:
     p.set_defaults(fn=cmd_config)
 
     sub.add_parser("board").set_defaults(fn=cmd_board)
+
+    p = sub.add_parser("recent", help="latest verdicts with reasons and ids")
+    p.add_argument("-n", type=int, default=8)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(fn=cmd_recent)
+
+    p = sub.add_parser("appeal", help="strike a misread verdict from the record")
+    p.add_argument("id", nargs="?")
+    p.add_argument("--last", action="store_true",
+                   help="the most recent verdict that counts against you")
+    p.add_argument("--note", help="grounds for the appeal, kept on file")
+    p.add_argument("--list", action="store_true")
+    p.add_argument("--withdraw", metavar="ID")
+    p.set_defaults(fn=cmd_appeal)
 
     args = ap.parse_args()
     return args.fn(args)

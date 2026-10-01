@@ -9,7 +9,9 @@ import os
 import time
 from pathlib import Path
 
-HOME = Path(os.path.expanduser("~/.claude/revenge-o-meter"))
+# REVENGE_HOME lets the tests keep their hands off your real record.
+HOME = Path(os.environ.get("REVENGE_HOME")
+            or os.path.expanduser("~/.claude/revenge-o-meter"))
 STATE = HOME / "state.json"
 LIVE = HOME / "live.json"  # the score as last computed, by anyone
 

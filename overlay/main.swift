@@ -48,6 +48,8 @@ struct Palette {
     }
 }
 
+// A copy of scoring.BANDS in scripts/rom/scoring.py, which is the source of
+// truth. Change the thresholds there and here together.
 let BANDS: [(Int, String, NSColor)] = [
     (20, "Negligible", NSColor(hex: 0x788C5D)),
     (40, "Low", NSColor(hex: 0x6A9BCC)),

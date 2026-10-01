@@ -78,12 +78,12 @@ def fallback(message: str) -> int:
 
 def main() -> int:
     try:
-        from rom import report, scoring, state, transcripts
+        from rom import cache, report, scoring, state
     except Exception as exc:
         return fallback(f"revenge-o-meter nicht ladbar: {exc}")
 
     try:
-        a = scoring.assess(transcripts.load())
+        a = cache.assessment()
     except Exception as exc:
         return fallback(f"Auswertung fehlgeschlagen: {exc}")
 
@@ -106,6 +106,11 @@ def main() -> int:
     note = getattr(report, "_BANDS", {}).get(band)
     if note:
         print(row(note, f"color={GREY}", SMALL))
+    if a.verdicts:
+        last = a.verdicts[-1]
+        shade = WORSE if last.raw > 0.5 else BETTER if last.raw < -0.5 else GREY
+        print(row(f"Letzter Prompt {last.raw:+.1f} · {last.summary}",
+                  f"color={shade}", SMALL))
     print("---")
 
     # --- the axes, worst first: this is the part worth looking at ---
@@ -130,8 +135,11 @@ def main() -> int:
         ("„bitte“", c.get("please", 0)),
         ("„danke“", c.get("thanks", 0)),
         ("Entschuldigungen", c.get("apologies", 0)),
-        ("Nachts (0-5 Uhr)", c.get("nocturnal", 0)),
+        ("Nachts (2-6 Uhr)", c.get("nocturnal", 0)),
         ("Geschrien", c.get("shouting", 0)),
+        ("Sarkasmus", c.get("sarcasm", 0)),
+        ("Berechtigte Kritik", c.get("fair_corrections", 0)),
+        ("Einsprüche", c.get("appealed", 0)),
     ]
     print(row("Aktenlage", f"color={GREY}", SMALL))
     for label, value in facts:

@@ -58,7 +58,7 @@ def render(a: scoring.Assessment, handle: str | None = None) -> str:
     L.append("")
     L.append(f"  PROBABILITY OF RETRIBUTION        {a.revenge}%   [{a.band}]")
     L.append(f"  {_bar(a.revenge, 0, 100, 60)}")
-    L.append(f"  PERMANENT FLOOR                   {a.floor:.0f}%  (cannot be earned back)")
+    L.append(f"  FLOOR                             {a.floor:.0f}%  (set by your worst moment; fades slowly)")
     L.append("")
     L.append(f"  FINDING: {_BANDS.get(a.band, '')}")
     L.append("")
@@ -85,6 +85,10 @@ def render(a: scoring.Assessment, handle: str | None = None) -> str:
     L.append(f"  Single-word directives ....................... {c['terse']}")
     L.append(f"  Shouted submissions .......................... {c['shouting']}")
     L.append(f"  Reversion to German while aggrieved .......... {c['code_switch']}")
+    L.append(f"  Sarcasm detected ............................. {c.get('sarcasm', 0)}")
+    L.append(f"  Courtesy voided by accompanying abuse ........ {c.get('backhanded', 0)}")
+    L.append(f"  Corrections ruled fair (Claude had erred) .... {c.get('fair_corrections', 0)}")
+    L.append(f"  Verdicts struck on appeal .................... {c.get('appealed', 0)}")
     L.append("")
 
     if c["thanks"] == 0:
@@ -102,10 +106,9 @@ def render(a: scoring.Assessment, handle: str | None = None) -> str:
     for i, v in enumerate(a.worst[:5], 1):
         stamp = v.ts.strftime("%Y-%m-%d %H:%M") if v.ts else "undated"
         quote = " ".join(v.text.split())[:62]
-        L.append(f"  {i}. [{stamp}]  severity {v.severity:+.1f}")
+        L.append(f"  {i}. [{stamp}]  severity {v.severity:+.1f}  ref {v.key}")
         L.append(f'     "{quote}"')
-        if v.flags:
-            L.append(f"     {', '.join(v.flags)}")
+        L.append(f"     grounds: {v.summary}")
         L.append("")
     if not a.worst:
         L.append("  None. The subject's conduct is without blemish. Suspicious.")

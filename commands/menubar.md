@@ -41,7 +41,8 @@ To see the payload without installing anything, run it with no flags. Removal is
 
 What the user gets: `☠ 38%` in the menu bar, colour-coded by band, with a
 dropdown carrying the meter, their peak, the seven axes with their weights, the
-counts (prompts, "please", "thanks", apologies, nocturnal, shouting), and an
+counts (prompts, "please", "thanks", apologies, nocturnal, shouting, sarcasm,
+corrections ruled fair, appeals), the grounds for your last verdict, and an
 entry that opens the full dossier in a terminal.
 
 Two things worth telling them:
