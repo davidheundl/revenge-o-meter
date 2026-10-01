@@ -43,6 +43,11 @@ class Aim(unittest.TestCase):
     def test_insult_at_claude_counts_in_full(self):
         self.assertGreaterEqual(raw("you are an idiot"), 11)
 
+    def test_bare_insult_is_aimed_at_claude(self):
+        for text in ("idiot", "useless!", "idiot. fix it"):
+            with self.subTest(text=text):
+                self.assertGreaterEqual(raw(text), 11 if "useless" not in text else 6)
+
     def test_self_deprecation_is_not_cruelty(self):
         self.assertLessEqual(raw("I am such an idiot"), 0)
         self.assertLessEqual(raw("ich bin so dumm"), 0)

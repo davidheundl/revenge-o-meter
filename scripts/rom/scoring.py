@@ -202,7 +202,7 @@ def band_of(score: int) -> str:
 
 # Bump when judge_prompt's logic changes in a way the patterns and constants
 # below do not capture. Lexicon and pattern edits invalidate on their own.
-HEURISTICS_VERSION = 1
+HEURISTICS_VERSION = 2
 
 
 def signature(adjust: dict | None = None) -> str:
@@ -282,6 +282,10 @@ def _target(low: str, m: re.Match) -> tuple[float, str]:
     """How much of an aimed word lands on Claude: (factor, where)."""
     before = [w.strip("'\"") for w in _words_before(low, m.start(), 4)]
     after = [w.strip("'\"") for w in _words_after(low, m.end(), 4)]
+    if not before and not after:
+        # A bare "idiot" or "useless!" with nothing else in the clause: sent
+        # to Claude, it can only be aimed at Claude.
+        return 1.0, "claude"
     if any(_AT_SELF.match(w) for w in before):
         return 0.0, "self"
     if any(_AT_CLAUDE.match(w) for w in before + after):
