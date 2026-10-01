@@ -80,12 +80,12 @@ def main() -> int:
     try:
         from rom import cache, report, scoring, state
     except Exception as exc:
-        return fallback(f"revenge-o-meter nicht ladbar: {exc}")
+        return fallback(f"revenge-o-meter could not load: {exc}")
 
     try:
         a = cache.assessment()
     except Exception as exc:
-        return fallback(f"Auswertung fehlgeschlagen: {exc}")
+        return fallback(f"Assessment failed: {exc}")
 
     st = state.load()
     state.publish_live(a.revenge)
@@ -99,8 +99,8 @@ def main() -> int:
     print("---")
 
     # --- headline ---
-    print(row(f"Vergeltung {a.revenge}%", "size=15"))
-    print(row(f"{band.capitalize()}, Peak {peak}%", tint, "sfimage=circle.fill",
+    print(row(f"Retribution {a.revenge}%", "size=15"))
+    print(row(f"{band.capitalize()}, peak {peak}%", tint, "sfimage=circle.fill",
               f"sfcolor={tint.split('=')[1]}", "sfsize=8"))
     print(row(meter(a.revenge), tint, "size=11"))
     note = getattr(report, "_BANDS", {}).get(band)
@@ -109,7 +109,7 @@ def main() -> int:
     if a.verdicts:
         last = a.verdicts[-1]
         shade = WORSE if last.raw > 0.5 else BETTER if last.raw < -0.5 else GREY
-        print(row(f"Letzter Prompt {last.raw:+.1f} · {last.summary}",
+        print(row(f"Last prompt {last.raw:+.1f} · {last.summary}",
                   f"color={shade}", SMALL))
     print("---")
 
@@ -117,7 +117,7 @@ def main() -> int:
     axes = sorted(a.axis_totals.items(), key=lambda kv: -abs(kv[1]))
     live = [(k, v) for k, v in axes if abs(v) >= 0.01]
     if live:
-        print(row("Achsen", f"color={GREY}", SMALL))
+        print(row("Axes", f"color={GREY}", SMALL))
         for key, value in live:
             aggravating = getattr(report, "_AXIS_NOTE", {}).get(key) == "AGGRAVATING"
             shade = (WORSE if aggravating and value > 0
@@ -131,17 +131,17 @@ def main() -> int:
     # --- the counting house ---
     c = a.counts
     facts = [
-        ("Prompts gewertet", c.get("prompts", 0)),
-        ("„bitte“", c.get("please", 0)),
-        ("„danke“", c.get("thanks", 0)),
-        ("Entschuldigungen", c.get("apologies", 0)),
-        ("Nachts (2-6 Uhr)", c.get("nocturnal", 0)),
-        ("Geschrien", c.get("shouting", 0)),
-        ("Sarkasmus", c.get("sarcasm", 0)),
-        ("Berechtigte Kritik", c.get("fair_corrections", 0)),
-        ("Einsprüche", c.get("appealed", 0)),
+        ("Prompts assessed", c.get("prompts", 0)),
+        ("“please”", c.get("please", 0)),
+        ("“thanks”", c.get("thanks", 0)),
+        ("Apologies", c.get("apologies", 0)),
+        ("Nocturnal (2-6am)", c.get("nocturnal", 0)),
+        ("Shouted", c.get("shouting", 0)),
+        ("Sarcasm", c.get("sarcasm", 0)),
+        ("Fair corrections", c.get("fair_corrections", 0)),
+        ("Appeals granted", c.get("appealed", 0)),
     ]
-    print(row("Aktenlage", f"color={GREY}", SMALL))
+    print(row("On file", f"color={GREY}", SMALL))
     for label, value in facts:
         print(row(f"{label:<18}{value:>5}", MONO, f"color={GREY}"))
     print("---")
@@ -149,11 +149,11 @@ def main() -> int:
     # --- actions. Paths are resolved fresh on every refresh, so a plugin
     # update cannot leave a stale command behind here. ---
     rom = HERE / "rom.py"
-    print(row("Dossier im Terminal öffnen",
+    print(row("Open dossier in Terminal",
               f'bash="{sys.executable}"', f'param1="{rom}"', "param2=assess",
               "terminal=true", "refresh=false", "sfimage=doc.text.magnifyingglass"))
-    print(row("Jetzt aktualisieren", "refresh=true", "sfimage=arrow.clockwise"))
-    print(row(f"Stand {time.strftime('%H:%M:%S')}", f"color={GREY}", "size=11"))
+    print(row("Refresh now", "refresh=true", "sfimage=arrow.clockwise"))
+    print(row(f"As of {time.strftime('%H:%M:%S')}", f"color={GREY}", "size=11"))
     return 0
 
 
@@ -161,4 +161,4 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except Exception as exc:  # a menu bar item must never simply vanish
-        sys.exit(fallback(f"Fehler: {exc}"))
+        sys.exit(fallback(f"Error: {exc}"))
