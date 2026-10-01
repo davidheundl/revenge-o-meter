@@ -10,7 +10,7 @@ Output is SwiftBar's plugin format: the first line is the menu bar title, `---`
 opens the dropdown, `-- ` indents a submenu, and `| key=value` sets per-line
 options.
 
-Read-only by design. This runs on a timer, and `state.record()` would overwrite
+Read-only on the record. This runs on a timer, and `state.record()` would overwrite
 `last_score` on every refresh -- destroying the "since your last prompt" delta
 the status line shows -- and bury the history under idle readings.
 """
@@ -88,6 +88,7 @@ def main() -> int:
         return fallback(f"Auswertung fehlgeschlagen: {exc}")
 
     st = state.load()
+    state.publish_live(a.revenge)
     band = a.band
     tint = colour(band)
     peak = max(int(st.get("peak") or 0), a.revenge)

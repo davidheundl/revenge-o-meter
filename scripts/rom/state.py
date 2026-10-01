@@ -11,6 +11,7 @@ from pathlib import Path
 
 HOME = Path(os.path.expanduser("~/.claude/revenge-o-meter"))
 STATE = HOME / "state.json"
+LIVE = HOME / "live.json"  # the score as last computed, by anyone
 
 DEFAULT = {
     "handle": None,
@@ -47,6 +48,23 @@ def save(d: dict) -> None:
     tmp = STATE.with_suffix(".tmp")
     tmp.write_text(json.dumps(d, indent=2))
     tmp.replace(STATE)
+
+
+def publish_live(score: int) -> None:
+    """Note the current score for readers that cannot compute it.
+
+    Separate from record(): the menu bar and the prompt hook compute the score
+    too, but must not touch last_score -- the status line's delta is measured
+    against it. Without this, the prompt box badge only sees last_score, and
+    in the desktop app, where the status line never runs, that goes stale.
+    """
+    try:
+        HOME.mkdir(parents=True, exist_ok=True)
+        tmp = LIVE.with_name(f".live.{os.getpid()}.tmp")  # writers can overlap
+        tmp.write_text(json.dumps({"score": int(score), "at": int(time.time())}))
+        tmp.replace(LIVE)
+    except OSError:
+        pass
 
 
 def record(score: int) -> dict:

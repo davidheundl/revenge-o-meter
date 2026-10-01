@@ -110,6 +110,7 @@ def main() -> int:
         score, _ = cache.quick_score()
     except Exception:
         return emit(None, None)
+    state.publish_live(score)
 
     band = band_of(score)
     peak = max(int(st.get("peak") or 0), score)

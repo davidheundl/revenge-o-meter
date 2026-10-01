@@ -68,6 +68,7 @@ def main() -> int:
     prev = st.get("last_score")
     delta = None if prev is None else score - int(prev)
     state.record(score)
+    state.publish_live(score)
 
     colour, band = band_colour(score)
     filled = max(0, min(10, round(score / 10)))

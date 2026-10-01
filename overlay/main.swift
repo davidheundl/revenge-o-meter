@@ -7,7 +7,7 @@
 // Claude -- or on a claude.ai page -- the badge parks above it; otherwise it
 // hides.
 //
-// Read-only, like menubar.py: it reads state.json and never records, so the
+// Read-only: it reads live.json and state.json and never records, so the
 // status line's "since your last prompt" delta survives.
 
 import AppKit
@@ -67,11 +67,22 @@ struct Standing {
     var peak: Int
 }
 
+let LIVE = (NSString(string: "~/.claude/revenge-o-meter/live.json").expandingTildeInPath)
+
+func readJSON(_ path: String) -> [String: Any]? {
+    guard let data = FileManager.default.contents(atPath: path) else { return nil }
+    return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+}
+
+/// The score comes from live.json, which the menu bar, the prompt hook and
+/// the status line all refresh; state.json's last_score is written by the
+/// status line alone, which never runs in the desktop app. Peak is the
+/// record's, but never below what is live now.
 func readStanding() -> Standing {
-    guard let data = FileManager.default.contents(atPath: STATE),
-          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-    else { return Standing(score: nil, peak: 0) }
-    return Standing(score: obj["last_score"] as? Int, peak: obj["peak"] as? Int ?? 0)
+    let st = readJSON(STATE)
+    let score = (readJSON(LIVE)?["score"] as? Int) ?? (st?["last_score"] as? Int)
+    let peak = max(st?["peak"] as? Int ?? 0, score ?? 0)
+    return Standing(score: score, peak: peak)
 }
 
 // MARK: - Accessibility
