@@ -55,22 +55,14 @@ def emit(context: str | None, message: str | None) -> int:
     return 0
 
 
-def bar_text(score: int, band: str, peak: int, payload: dict) -> str:
+def bar_text(score: int, band: str, peak: int, verdict) -> str:
     """Plain text: this goes into a UI notice, where an ANSI escape shows raw."""
     filled = max(0, min(10, round(score / 10)))
     meter = "█" * filled + "░" * (10 - filled)
     parts = [f"☠ REVENGE {score}% · {band}", meter, f"peak {peak}%"]
 
-    # The prompt just submitted is in the payload, so unlike the status line
-    # this can judge it immediately instead of a beat later. Optional: the field
-    # name is not pinned down in the docs, so its absence must not matter.
-    text = payload.get("prompt") or payload.get("user_prompt")
-    if isinstance(text, str) and text.strip():
-        try:
-            v = judge_now(text, payload)
-            parts.append(f"this prompt {v.raw:+.1f} · {v.summary}")
-        except Exception:
-            pass
+    if verdict is not None:
+        parts.append(f"this prompt {verdict.raw:+.1f} · {verdict.summary}")
     return "  ·  ".join(parts)
 
 
@@ -109,15 +101,26 @@ def main() -> int:
     if not (want_bar or want_remark):
         return emit(None, None)
 
+    # The prompt just submitted is in the payload, so unlike the status line
+    # this can judge it immediately instead of a beat later. Optional: the field
+    # name is not pinned down in the docs, so its absence must not matter.
+    verdict = None
+    text = payload.get("prompt") or payload.get("user_prompt")
+    if isinstance(text, str) and text.strip():
+        try:
+            verdict = judge_now(text, payload)
+        except Exception:
+            verdict = None
+
     try:
-        score, _ = cache.quick_score()
+        score = cache.assessment_with(verdict).revenge
     except Exception:
         return emit(None, None)
     state.publish_live(score)
 
     band = scoring.band_of(score)
     peak = max(int(st.get("peak") or 0), score)
-    message = bar_text(score, band, peak, payload) if want_bar else None
+    message = bar_text(score, band, peak, verdict) if want_bar else None
 
     if not want_remark:
         return emit(None, message)

@@ -68,7 +68,8 @@ def _verdict(row: dict) -> scoring.PromptVerdict:
     v = scoring.PromptVerdict(text="", ts=ts, project=row.get("p", ""),
                               raw=row["r"], hits=row.get("h") or {},
                               flags=row.get("f") or [], german=bool(row.get("g")),
-                              key=row["k"], note=row.get("s", ""))
+                              key=row["k"], note=row.get("s", ""),
+                              digest=row.get("x", ""))
     # Keep the rule ids so a verdict rebuilt from here can still be appealed.
     v.reasons = [scoring.Hit("", r, "", 1.0) for r in row.get("u") or []]
     return v
@@ -138,6 +139,22 @@ def last_in(path: Path) -> scoring.PromptVerdict | None:
 
 def assessment(paths: list[Path] | None = None) -> scoring.Assessment:
     return scoring.aggregate(verdicts(paths), appeals.keys())
+
+
+def assessment_with(pending: scoring.PromptVerdict | None) -> scoring.Assessment:
+    """The standing including a prompt Claude Code has not written down yet.
+
+    The prompt hook runs before the transcript has the prompt it fires on, so
+    without this the hook's number lags one prompt behind the menu bar's,
+    which reads the transcript later and does include it."""
+    vs = verdicts()
+    if pending is not None:
+        digest = transcripts.text_hash(pending.text)
+        recent = [v.digest for v in vs[-3:] if v.project != transcripts.CHAT_PROJECT]
+        if digest not in recent:
+            pending.digest = digest
+            vs.append(pending)
+    return scoring.aggregate(vs, appeals.keys())
 
 
 def quick_score(paths: list[Path] | None = None) -> tuple[int, float]:

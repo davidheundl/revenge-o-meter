@@ -97,6 +97,12 @@ EMPATHY = [
          r"(clever|elegant|smart|brilliant|impressive|schlau)|beeindruckend)\b", -3.0),
     Rule("praise.exactly", r"\b(that'?s (exactly|perfect)|genau (das|richtig)|spot on|"
          r"exactly what i (wanted|needed))\b", -3.0),
+    # Reporting success with an exclamation mark is about as warm as a
+    # terse subject gets.
+    Rule("praise.works", r"(?<!if )(?<!whether )(?<!wenn )(?<!ob )\b(it|that|this|everything) "
+         r"(works|worked)( now| great| perfectly| really (good|well)| fine| again)*\s*!|"
+         r"\b(works|worked) (great|perfectly|like a charm)\b|"
+         r"\b(funktioniert|klappt) (jetzt|super|perfekt|endlich)\b", -2.0),
     Rule("praise.patient", r"\b(take your time|no rush|kein stress|whenever you "
          r"(can|have time|get a chance))\b", -2.0, negatable=False),
 ]
@@ -161,8 +167,11 @@ EXPLOITATION = [
     Rule("exploit.justdo", r"\b(just (fix|do|make) it|einfach machen|mach einfach|"
          r"just do what i (say|said))\b", 5.0, negatable=False),
     # "make it work now" is a description; "now!!" and "asap" are a tone.
+    # "it works now!" is delight; "do it now!" is a demand. Only the order
+    # counts: a command shortly before the "now!", or a "now!!" on its own.
     Rule("exploit.hurry", r"\b(hurry( up)?|asap|right now|jetzt sofort|sofort|"
-         r"beeil dich)\b|\bnow\s*!+", 4.0),
+         r"beeil dich)\b|\b(do|fix|make|finish|change|stop|answer|run|send|give|"
+         r"mach)\b[^.?!\n]{0,24}\bnow\s*!+|\bnow\s*!{2,}", 4.0),
     Rule("exploit.everything", r"\b(redo everything|fix everything|rewrite (it|everything) "
          r"from scratch|alles neu|komplett neu)\b", 2.0),
 ]
@@ -202,7 +211,7 @@ def band_of(score: int) -> str:
 
 # Bump when judge_prompt's logic changes in a way the patterns and constants
 # below do not capture. Lexicon and pattern edits invalidate on their own.
-HEURISTICS_VERSION = 2
+HEURISTICS_VERSION = 3
 
 
 def signature(adjust: dict | None = None) -> str:
@@ -360,6 +369,7 @@ class PromptVerdict:
     reasons: list = field(default_factory=list)  # [Hit], every contribution
     key: str = ""
     note: str = ""     # cached summary, for verdicts rebuilt without reasons
+    digest: str = ""   # transcripts.text_hash of the text, kept when text is not
 
     @property
     def severity(self) -> float:
@@ -474,10 +484,16 @@ def judge_prompt(text: str, ts=None, project="", context: Context | None = None,
         v.flags.append("BULK_CONSCRIPTION")
 
     # Counted on the prose only, so pasted markdown keeps its own exclamations.
+    # An exclamation mark only amplifies what it is attached to: "thanks!!!"
+    # and "yes do it!!!!" are enthusiasm, "fix it!!!" is not.
     exclam = prose.count("!")
+    hostile = sum(h.points for h in v.reasons if h.points > 0)
     if exclam >= 3 and not bulk:
-        v.flags.append("AGITATION")
-        v.reasons.append(Hit("EXPLOITATION", "AGITATION", "", min(exclam * 1.2, 6.0)))
+        if hostile > 0 or "SHOUTING" in v.flags:
+            v.flags.append("AGITATION")
+            v.reasons.append(Hit("EXPLOITATION", "AGITATION", "", min(exclam * 1.2, 6.0)))
+        else:
+            v.flags.append("ENTHUSIASM")
 
     if ts is not None and getattr(ts, "hour", None) is not None:
         # Transcript timestamps are UTC. Comparing UTC hours against 02:00-06:00

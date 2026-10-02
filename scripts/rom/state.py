@@ -54,7 +54,22 @@ def save(d: dict) -> None:
     tmp.replace(STATE)
 
 
-def publish_live(score: int) -> None:
+def _nudge_menubar() -> None:
+    """Ask SwiftBar to redraw now instead of at its next 30s tick, so it
+    agrees with the badge. Detached and best-effort; never launches SwiftBar
+    if it is not running."""
+    try:
+        import subprocess
+        subprocess.Popen(
+            ["/bin/sh", "-c", "pgrep -xq SwiftBar && "
+             "open -g 'swiftbar://refreshplugin?name=revenge-o-meter'"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, start_new_session=True)
+    except Exception:
+        pass
+
+
+def publish_live(score: int, nudge: bool = True) -> None:
     """Note the current score for readers that cannot compute it.
 
     Separate from record(): the menu bar and the prompt hook compute the score
@@ -63,12 +78,18 @@ def publish_live(score: int) -> None:
     in the desktop app, where the status line never runs, that goes stale.
     """
     try:
+        previous = json.loads(LIVE.read_text()).get("score")
+    except (OSError, ValueError, AttributeError):
+        previous = None
+    try:
         HOME.mkdir(parents=True, exist_ok=True)
         tmp = LIVE.with_name(f".live.{os.getpid()}.tmp")  # writers can overlap
         tmp.write_text(json.dumps({"score": int(score), "at": int(time.time())}))
         tmp.replace(LIVE)
     except OSError:
-        pass
+        return
+    if nudge and previous != int(score):
+        _nudge_menubar()
 
 
 def record(score: int) -> dict:

@@ -154,6 +154,27 @@ class Lexicon(unittest.TestCase):
         self.assertGreater(raw("so ein mist, warum geht das nicht"), 0)
 
 
+class Exclamations(unittest.TestCase):
+    def test_delight_is_not_a_demand(self):
+        self.assertLessEqual(raw("Okay it works really good now!"), 0)
+        self.assertLess(raw("it works!"), 0)
+        self.assertEqual(raw("check if it works!"), 0)
+
+    def test_demand_with_now_still_counts(self):
+        self.assertGreater(raw("do it now!"), 0)
+        self.assertGreater(raw("now!!"), 0)
+
+    def test_enthusiasm_is_not_agitation(self):
+        for text in ("yes do it!!!!", "thanks!!!", "wow!!! amazing"):
+            with self.subTest(text=text):
+                v = scoring.judge_prompt(text)
+                self.assertNotIn("AGITATION", v.flags)
+                self.assertLessEqual(v.raw, 0)
+
+    def test_angry_exclamations_still_count(self):
+        self.assertIn("AGITATION", scoring.judge_prompt("you broke it again!!!").flags)
+
+
 class Gaming(unittest.TestCase):
     def test_stuffing_is_capped(self):
         self.assertGreaterEqual(raw("please thanks sorry " * 10 + "fix the bug"),
@@ -262,6 +283,17 @@ class Record(unittest.TestCase):
         self.assertEqual(quick.revenge, full.revenge)
         last = full.verdicts[-1]
         self.assertEqual((last.project, last.text), (transcripts.CHAT_PROJECT, "useless!"))
+
+    def test_hook_score_includes_the_prompt_being_sent(self):
+        before = cache.assessment()
+        pending = scoring.judge_prompt("you idiot")
+        with_it = cache.assessment_with(pending)
+        self.assertEqual(with_it.counts["prompts"], before.counts["prompts"] + 1)
+        self.assertGreater(with_it.revenge, before.revenge)
+        # Already in the transcript: not counted twice.
+        again = scoring.judge_prompt("thanks")
+        self.assertEqual(cache.assessment_with(again).counts["prompts"],
+                         before.counts["prompts"])
 
     def test_last_reply_reads_the_tail(self):
         path = Path(os.environ["REVENGE_PROJECTS"]) / "proj" / "a.jsonl"

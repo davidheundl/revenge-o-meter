@@ -16,6 +16,7 @@ the status line shows -- and bury the history under idle readings.
 """
 from __future__ import annotations
 
+import os
 import sys
 import time
 from pathlib import Path
@@ -88,7 +89,10 @@ def main() -> int:
         return fallback(f"Assessment failed: {exc}")
 
     st = state.load()
-    state.publish_live(a.revenge)
+    # Run by SwiftBar or xbar: don't ask it to refresh itself. Run by the
+    # overlay after a Chat tab send: do, so the menu bar moves with the badge.
+    hosted = "SWIFTBAR" in os.environ or "XBARDarkMode" in os.environ
+    state.publish_live(a.revenge, nudge=not hosted)
     band = a.band
     tint = colour(band)
     peak = max(int(st.get("peak") or 0), a.revenge)
