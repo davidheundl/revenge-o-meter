@@ -24,6 +24,8 @@ DEFAULT = {
     "publish_quote": True,  # may a (redacted) quote go on the public board?
                             # on by design: the hall of shame is the point.
                             # every quote passes redact.py first.
+    "capture_chat": True,   # may the prompt box overlay record what you send
+                            # in Claude's Chat tab? Read by overlay/main.swift.
     "installed_at": None,
     "last_score": None,
     "peak": 0,

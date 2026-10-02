@@ -24,6 +24,10 @@ from . import appeals, scoring, state, transcripts
 CACHE = state.HOME / "cache.json"
 
 
+# Bump when the row layout changes.
+ROWS = 2
+
+
 def _load(sig: str) -> dict:
     try:
         d = json.loads(CACHE.read_text())
@@ -55,6 +59,7 @@ def _row(v: scoring.PromptVerdict) -> dict:
         "s": v.summary,
         "u": v.rules,
         "p": v.project,
+        "x": transcripts.text_hash(v.text),  # a hash, for drop_echoes; not the text
     }
 
 
@@ -70,7 +75,7 @@ def _verdict(row: dict) -> scoring.PromptVerdict:
 
 
 def _rows_by_file(paths: list[Path] | None, adjust: dict) -> dict[str, list[dict]]:
-    sig = scoring.signature(adjust)
+    sig = f"{scoring.signature(adjust)}.{ROWS}"
     cache = _load(sig)
     files = cache.setdefault("files", {})
     out: dict[str, list[dict]] = {}
@@ -111,14 +116,16 @@ def verdicts(paths: list[Path] | None = None) -> list[scoring.PromptVerdict]:
     """Every verdict on file, oldest first, each submission counted once --
     resumed and forked sessions copy earlier prompts into new transcripts."""
     by_file = _rows_by_file(paths, appeals.adjust())
+    flat = [row for key in by_file for row in by_file[key]]  # scan order
+    flat = transcripts.drop_echoes(
+        flat, lambda r: (r.get("p") == transcripts.CHAT_PROJECT, r.get("x"), r["t"]))
     seen: set[str] = set()
     rows = []
-    for key in by_file:  # scan order, the same order transcripts.load keeps
-        for row in by_file[key]:
-            if row["k"] in seen:
-                continue
-            seen.add(row["k"])
-            rows.append(row)
+    for row in flat:
+        if row["k"] in seen:
+            continue
+        seen.add(row["k"])
+        rows.append(row)
     rows.sort(key=lambda r: r["t"])
     return [_verdict(r) for r in rows]
 

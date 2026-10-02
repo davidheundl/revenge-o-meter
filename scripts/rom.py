@@ -390,7 +390,7 @@ def cmd_config(args) -> int:
         if val is not None:
             st[key] = val
             changed = True
-    for key in ("haunt", "publish_quote", "chat_bar"):
+    for key in ("haunt", "publish_quote", "chat_bar", "capture_chat"):
         val = getattr(args, key, None)
         if val is not None:
             st[key] = val
@@ -399,7 +399,7 @@ def cmd_config(args) -> int:
         state.save(st)
     print(json.dumps({k: st.get(k) for k in
                       ("handle", "haunt", "publish_quote", "chat_bar",
-                       "peak", "last_score")},
+                       "capture_chat", "peak", "last_score")},
                      indent=2))
     return 0
 
@@ -550,6 +550,9 @@ def main() -> int:
     p.add_argument("--chat-bar", dest="chat_bar", action="store_true", default=None,
                    help="print the standing into the conversation on every prompt")
     p.add_argument("--no-chat-bar", dest="chat_bar", action="store_false")
+    p.add_argument("--capture-chat", dest="capture_chat", action="store_true",
+                   default=None, help="let the overlay record Chat tab prompts")
+    p.add_argument("--no-capture-chat", dest="capture_chat", action="store_false")
     p.set_defaults(fn=cmd_config)
 
     sub.add_parser("board").set_defaults(fn=cmd_board)

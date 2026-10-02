@@ -7,8 +7,14 @@
 // Claude -- or on a claude.ai page -- the badge parks above it; otherwise it
 // hides.
 //
-// Read-only: it reads live.json and state.json and never records, so the
-// status line's "since your last prompt" delta survives.
+// It never records a score, so the status line's "since your last prompt"
+// delta survives. It does record what you *send* from Claude's prompt box,
+// to ~/.claude/revenge-o-meter/chat-prompts.jsonl: the Chat tab keeps its
+// conversations on Anthropic's servers and runs no plugin hooks, so this is
+// the only way they reach the record. Only that box, only in Claude or on
+// claude.ai, and only while state.json's capture_chat is on (the default).
+// The scorer drops lines Claude Code recorded itself, so the Code tab's
+// prompts are not counted twice.
 
 import AppKit
 import ApplicationServices
@@ -177,6 +183,36 @@ func pageHost(of el: AXUIElement) -> String? {
     return nil
 }
 
+/// The path of the page an element belongs to, e.g. /chat/<id> or /new.
+/// Changes when you navigate to another conversation -- the one thing that
+/// empties the prompt box without sending it.
+func pagePath(of el: AXUIElement) -> String? {
+    var node = el
+    for _ in 0..<40 {
+        let role: String? = ax(node, kAXRoleAttribute)
+        if role == "AXWebArea" {
+            let url: NSURL? = ax(node, kAXURLAttribute)
+            return url?.path
+        }
+        guard let parent: AXUIElement = ax(node, kAXParentAttribute) else { return nil }
+        node = parent
+    }
+    return nil
+}
+
+/// What is typed in the box, with the placeholder ("Reply to Claude...")
+/// counted as empty.
+func typed(in el: AXUIElement) -> String? {
+    guard let v: String = ax(el, kAXValueAttribute) else { return nil }
+    let t = v.trimmingCharacters(in: .whitespacesAndNewlines)
+    if let ph: String = ax(el, "AXPlaceholderValue"),
+       t == ph.trimmingCharacters(in: .whitespacesAndNewlines) { return "" }
+    return t
+}
+
+let CHAT_LOG = (NSString(string: "~/.claude/revenge-o-meter/chat-prompts.jsonl").expandingTildeInPath)
+let SHIM = (NSString(string: "~/.claude/revenge-o-meter/statusline.py").expandingTildeInPath)
+
 /// AX frames are top-left-origin global coordinates; AppKit's are
 /// bottom-left of the primary screen.
 func toCocoa(_ r: CGRect) -> CGRect {
@@ -320,6 +356,14 @@ final class Overlay: NSObject {
     var bar: CGRect?
     var primedPids = Set<pid_t>()
 
+    // The send detector: the prompt box being watched, what was in it last
+    // tick, and which page it was on. Text that vanishes in one tick, on the
+    // same page, was sent.
+    var watched: AXUIElement?
+    var pending = ""
+    var pendingPage: String?
+    var capture = true
+
     override init() {
         panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
                         backing: .buffered, defer: false)
@@ -341,6 +385,7 @@ final class Overlay: NSObject {
     }
 
     func refreshStanding() {
+        capture = (readJSON(STATE)?["capture_chat"] as? Bool) ?? true
         let s = readStanding()
         if s.score != badge.standing.score || s.peak != badge.standing.peak {
             badge.standing = s
@@ -366,11 +411,19 @@ final class Overlay: NSObject {
         let focused = err == .success ? (raw as! AXUIElement) : nil
         currentApp = axApp
         trace(focused, why: "trusted=\(AXIsProcessTrusted()) axerr=\(err.rawValue)")
+        // Checked before the guards: clicking Send can move focus off the
+        // box in the same moment it empties.
+        watchForSend()
         guard let focused, isPromptBox(focused), let f = frame(of: focused)
         else { return hide() }
         if inBrowser {
             guard let host = pageHost(of: focused), host == "claude.ai" || host.hasSuffix(".claude.ai")
             else { return hide() }
+        }
+        if watched == nil || !CFEqual(watched!, focused) {
+            watched = focused
+            pending = typed(in: focused) ?? ""
+            pendingPage = pagePath(of: focused)
         }
 
         let box = composerFrame(around: focused, text: f)
@@ -378,6 +431,63 @@ final class Overlay: NSObject {
         bar = barFrame(in: axApp, above: box).map(toCocoa)
         place()
         if !panel.isVisible { panel.orderFrontRegardless() }
+    }
+
+    func watchForSend() {
+        guard let w = watched else { return }
+        guard let now = typed(in: w) else {
+            // The element is gone: the page re-rendered, nothing was sent.
+            watched = nil
+            pending = ""
+            return
+        }
+        if now.isEmpty {
+            if !pending.isEmpty, capture, let page = pagePath(of: w), page == pendingPage {
+                record(pending, page: page)
+            }
+            pending = ""
+            pendingPage = pagePath(of: w)
+        } else {
+            if pending.isEmpty { pendingPage = pagePath(of: w) }
+            pending = now
+        }
+    }
+
+    func record(_ text: String, page: String) {
+        let stamp = ISO8601DateFormatter()
+        stamp.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let row: [String: Any] = ["text": text, "ts": stamp.string(from: Date()), "page": page]
+        guard let data = try? JSONSerialization.data(withJSONObject: row),
+              var line = String(data: data, encoding: .utf8) else { return }
+        line += "\n"
+        if !FileManager.default.fileExists(atPath: CHAT_LOG) {
+            FileManager.default.createFile(atPath: CHAT_LOG, contents: nil,
+                                           attributes: [.posixPermissions: 0o600])
+        }
+        if let h = FileHandle(forWritingAtPath: CHAT_LOG) {
+            h.seekToEndOfFile()
+            h.write(line.data(using: .utf8)!)
+            h.closeFile()
+        }
+        note("sent: \(text.count) chars on \(page)")
+        rescore()
+    }
+
+    /// Re-run the scorer so live.json -- and this badge -- move now, not at
+    /// the menu bar's next refresh. The menu bar renderer is the one entry
+    /// point that publishes the score without touching the record.
+    func rescore() {
+        guard FileManager.default.fileExists(atPath: SHIM) else { return }
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        p.arguments = ["python3", SHIM, "menubar.py"]
+        p.standardInput = FileHandle.nullDevice
+        p.standardOutput = FileHandle.nullDevice
+        p.standardError = FileHandle.nullDevice
+        p.terminationHandler = { [weak self] _ in
+            DispatchQueue.main.async { self?.refreshStanding() }
+        }
+        try? p.run()
     }
 
     func place() {
@@ -414,6 +524,10 @@ final class Overlay: NSObject {
         }
         guard line != lastTrace else { return }
         lastTrace = line
+        note(line)
+    }
+
+    func note(_ line: String) {
         let path = NSString(string: "~/.claude/revenge-o-meter/overlay.log").expandingTildeInPath
         if !FileManager.default.fileExists(atPath: path) { FileManager.default.createFile(atPath: path, contents: nil) }
         if let h = FileHandle(forWritingAtPath: path) {

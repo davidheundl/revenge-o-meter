@@ -246,6 +246,23 @@ class Record(unittest.TestCase):
         softened = scoring.judge_prompt("you idiot", adjust={"cruel.insult": factor})
         self.assertAlmostEqual(softened.raw, v.raw * 0.5)
 
+    def test_chat_tab_prompts_count_once(self):
+        transcripts.CHAT_LOG.parent.mkdir(parents=True, exist_ok=True)
+        transcripts.CHAT_LOG.write_text("\n".join(json.dumps(r) for r in [
+            # Sent in the Chat tab: only the overlay saw it.
+            {"text": "useless!", "ts": "2026-09-02T09:00:00Z"},
+            # Sent in the Code tab: the overlay saw it too, seconds after
+            # Claude Code recorded it. Must not count twice.
+            {"text": "you idiot,  you broke the build", "ts": "2026-09-01T10:04:03Z"},
+        ]) + "\n")
+        quick = cache.assessment()
+        full = scoring.assess(transcripts.load(), appeals.adjust(), appeals.keys())
+        self.assertEqual(quick.counts["prompts"], 5)
+        self.assertEqual([v.key for v in quick.verdicts], [v.key for v in full.verdicts])
+        self.assertEqual(quick.revenge, full.revenge)
+        last = full.verdicts[-1]
+        self.assertEqual((last.project, last.text), (transcripts.CHAT_PROJECT, "useless!"))
+
     def test_last_reply_reads_the_tail(self):
         path = Path(os.environ["REVENGE_PROJECTS"]) / "proj" / "a.jsonl"
         self.assertEqual(transcripts.last_reply(path), "Okay.")

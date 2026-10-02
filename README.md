@@ -148,6 +148,12 @@ stable shim the status line uses, so a plugin update cannot strand it.
   spends none of your tokens on scoring. Only the commands you run yourself
   (the dossier's note, an appeal ruling) use Claude, inside your own
   conversation.
+- **The prompt box overlay records what you send in Claude's Chat tab** to
+  `~/.claude/revenge-o-meter/chat-prompts.jsonl` (readable by you only). Chat
+  conversations live on Anthropic's servers and run no plugin hooks, so this is
+  the only way they can be scored. It reads only Claude's own prompt box, in the
+  Claude app or on claude.ai, and only while the overlay is running. Turn it off
+  with `rom.py config --no-capture-chat`; delete the file to forget what it saw.
 - **One verdict per prompt is kept** in `~/.claude/revenge-o-meter/cache.json`:
   points, axes, flags and the grounds, never the prompt text. Your text stays
   where it already was, in the transcripts.

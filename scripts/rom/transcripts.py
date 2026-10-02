@@ -1,5 +1,10 @@
 """Read Claude Code transcripts and extract only what a human actually typed.
 
+Plus one file that is not a transcript: chat-prompts.jsonl, where the prompt
+box overlay records what you send in Claude's Chat tab. Chat conversations
+live on Anthropic's servers, never in ~/.claude/projects, and plugin hooks do
+not run there, so this is the only way they reach the record.
+
 The on-disk JSONL is an internal format. Empirically (verified against 26 files /
 72MB / 2840 `type:"user"` lines), ~88% of `type:"user"` lines are NOT prompts --
 they are tool results. There is no `sourceType` field to lean on. So we filter
@@ -15,10 +20,18 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from . import state
+
 # REVENGE_PROJECTS lets the tests point at fixtures instead of your history.
 PROJECTS_DIR = Path(os.environ.get("REVENGE_PROJECTS")
                     or os.path.expanduser("~/.claude/projects"))
 REPLY_TAIL = 3000  # chars of Claude's previous reply kept as context
+
+CHAT_LOG = state.HOME / "chat-prompts.jsonl"  # written by overlay/main.swift
+CHAT_PROJECT = "claude-chat"
+# The overlay also sees the Code tab's prompt box. A chat-log line whose text
+# Claude Code recorded within this many seconds is the same prompt, twice.
+ECHO_WINDOW = 600
 
 # Wrappers that arrive as user-role text but were never typed by a person.
 _SYNTHETIC = (
@@ -124,15 +137,63 @@ def clean(text: str) -> str:
 
 
 def iter_transcripts(paths: list[Path] | None = None):
-    files = paths if paths else sorted(PROJECTS_DIR.rglob("*.jsonl"))
-    for fp in files:
-        yield fp
+    if paths:
+        yield from paths
+        return
+    yield from sorted(PROJECTS_DIR.rglob("*.jsonl"))
+    if CHAT_LOG.exists():
+        yield CHAT_LOG
+
+
+def text_hash(text: str) -> str:
+    return hashlib.sha1(" ".join(text.split()).lower().encode()).hexdigest()[:12]
+
+
+def drop_echoes(items: list, info) -> list:
+    """Drop chat-log prompts that Claude Code also recorded.
+
+    info(item) -> (is_chat, text_hash, epoch). Shared by load() and the
+    verdict store, which only has the hash, so both drop the same ones."""
+    code: dict[str, list[float]] = {}
+    for it in items:
+        chat, h, t = info(it)
+        if not chat:
+            code.setdefault(h, []).append(t)
+    return [it for it in items
+            if not (info(it)[0] and any(abs(info(it)[2] - t) <= ECHO_WINDOW
+                                        for t in code.get(info(it)[1], ())))]
+
+
+def _epoch(ts: datetime | None) -> float:
+    return ts.timestamp() if ts else 0.0
+
+
+def _load_chat(fp: Path) -> list[Prompt]:
+    out = []
+    try:
+        lines = fp.read_text(errors="ignore").splitlines()
+    except OSError:
+        return out
+    for line in lines:
+        try:
+            obj = json.loads(line)
+        except (ValueError, TypeError):
+            continue
+        text = str(obj.get("text") or "").strip()
+        if not text:
+            continue
+        out.append(Prompt(text=text, ts=_parse_ts(obj.get("ts")), session="chat",
+                          project=CHAT_PROJECT))
+    return out
 
 
 def load(paths: list[Path] | None = None, limit: int | None = None) -> list[Prompt]:
     """Every human prompt on disk, oldest first."""
     out: list[Prompt] = []
     for fp in iter_transcripts(paths):
+        if fp == CHAT_LOG:
+            out.extend(_load_chat(fp))
+            continue
         project = fp.parent.name
         try:
             handle = fp.open(errors="ignore")
@@ -179,6 +240,8 @@ def load(paths: list[Path] | None = None, limit: int | None = None) -> list[Prom
                     )
                 )
                 reply = ""
+    out = drop_echoes(out, lambda p: (p.project == CHAT_PROJECT, text_hash(p.text),
+                                      _epoch(p.ts)))
     # Resumed and forked sessions copy earlier turns into a new transcript, so
     # the same submission can appear in several files. Count it once.
     seen: set[tuple[str, str]] = set()
